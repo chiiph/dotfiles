@@ -1,0 +1,445 @@
+(server-start)
+
+(add-to-list 'load-path "~/.emacs.d")
+
+;; {{ COLORS
+
+;; (add-to-list 'load-path "~/.emacs.d/emacs-color-theme-solarized")
+;; (enable-theme 'solarized-light)
+
+(require 'color-theme)
+(color-theme-initialize)
+
+(require 'color-theme-gruber-darker)
+(color-theme-gruber-darker)
+
+;; }}
+
+;; {{ Misc
+
+(unless (and (fboundp 'dbus-register-signal)
+                 ;; avoid a bug in Emacs 24.0 under darwin
+                 (ignore-errors (require 'notifications nil t)))
+      ;; else try notify.el, there's a recipe for it
+      (unless (fboundp 'notify)
+        (ignore-errors (require 'notify nil 'noerror))))
+
+(ignore-errors (require 'growl))
+
+(tool-bar-mode -1)
+(menu-bar-mode -1)
+(scroll-bar-mode -1)
+
+;; Do some line numbering
+(when (locate-library "linum")
+  (require 'linum)
+  (global-linum-mode 1))
+
+(setq inhibit-startup-message t)        ; dont show the GNU splash screen
+(transient-mark-mode t)                 ; show selection from mark
+(menu-bar-mode -1)                      ; disable menu bar
+(mouse-avoidance-mode 'jump)            ; jump mouse away when typing
+(setq visible-bell 1)                   ; turn off bip warnings
+(show-paren-mode t)                     ; turn on highlight paren mode
+(auto-compression-mode 1)               ; browse tar archives
+(put 'upcase-region 'disabled nil)      ; enable ``upcase-region''
+(put 'set-goal-column 'disabled nil)    ; enable column positioning
+(setq case-fold-search t)               ; make search ignore case
+(fset 'yes-or-no-p 'y-or-n-p)
+
+;; Use ido
+;; (when (locate-library "ido")
+;;   (require 'ido)
+;;   (setq ido-enable-flex-matching t)
+;;   (setq ido-everywhere t)
+;;   (ido-mode 1))
+
+;; Set smooth scroll
+(setq scroll-step 1 scroll-conservatively 10000)
+
+;; Add a column marker at line 80
+(when (locate-library "column-marker")
+  (require 'column-marker)
+  (column-marker-1 80))
+
+;; enable ansi color output in shell
+(add-hook 'shell-mode-hook 'ansi-color-for-comint-mode-on)
+
+(add-hook 'before-save-hook 'time-stamp)
+(add-hook 'before-save-hook 'delete-trailing-whitespace)
+
+(delete-selection-mode 1)
+
+;; Some defaults
+(setq-default indent-tabs-mode nil)
+(setq-default tab-width 2)
+
+;; Uniquify
+(require 'uniquify)
+
+;; Ace-jump
+(require 'ace-jump-mode)
+(define-key global-map (kbd "C-c SPC") 'ace-jump-mode)
+
+;; CMake
+(require 'cmake-mode)
+(setq auto-mode-alist
+      (append '(("CMakeLists\\.txt\\'" . cmake-mode)
+                ("\\.cmake\\'" . cmake-mode))
+              auto-mode-alist))
+
+(setq mac-allow-anti-aliasing nil)
+(set-default-font "Terminus-14")
+;; }}
+
+;;{{ Helper functions
+
+;;; Reload Emacs config
+;;  By http://www.emacswiki.org/cgi-bin/wiki/JesseWeinstein
+(defun load-.emacs ()
+  "Runs load-file on ~/.emacs"
+  (interactive)
+  (load-file "~/.emacs"))
+
+;; Add a zsh command
+(defun zsh (&optional new)
+  "Switch to the zsh buffer or start one if none exists."
+  (interactive "P")
+  (if new
+      (ansi-term "/bin/zsh" "zsh")
+      (if (get-buffer "*zsh*")
+          (switch-to-buffer "*zsh*")
+          (ansi-term "/bin/zsh" "zsh"))))
+;; }}
+
+;; {{ Custom Keybindings
+
+;; better switch buffer command
+(global-set-key [(control x) b] 'iswitchb-buffer)
+
+;; Global binding to access a zsh shell
+(global-set-key [(control c) (control s)] 'start-zsh)
+
+;; }}
+
+;; {{ C and C++
+
+(require 'cc-mode)
+
+(add-to-list 'auto-mode-alist '("\\.h$" . c++-mode))
+(add-to-list 'auto-mode-alist '("\\.cpp$" . c++-mode))
+
+;;(add-hook 'c-mode-hook (lambda () (c++-mode)))
+(add-hook 'c-mode-common-hook
+          (lambda ()
+            (flyspell-prog-mode)
+            (setq tab-width 2)
+            (setq c-basic-offset tab-width)
+            (setq indent-tabs-mode nil)))
+
+;; automatic indent on return in cc-mode
+;; (define-key c-mode-base-map "\r" 'newline-and-indent)
+
+;; Do not check for old-style (K&R) function declarations;
+;; this speeds up indenting a lot.
+(setq c-recognize-knr-p nil)
+
+;; syntax-highlighting for Qt
+;; (based on work by Arndt Gulbrandsen, Troll Tech)
+(defun jk/c-mode-common-hook ()
+  "Set up c-mode and related modes.
+
+ Includes support for Qt code (signal, slots and alikes)."
+
+  ;; base-style
+  (c-set-style "stroustrup")
+  ;; set auto cr mode
+  (c-toggle-auto-hungry-state 1)
+
+  ;; qt keywords and stuff ...
+  ;; set up indenting correctly for new qt kewords
+  (setq c-protection-key (concat "\\<\\(public\\|public slot\\|protected"
+                                 "\\|protected slot\\|private\\|private slot"
+                                 "\\)\\>")
+        c-C++-access-key (concat "\\<\\(signals\\|public\\|protected\\|private"
+                                 "\\|public slots\\|protected slots\\|private slots"
+                                 "\\)\\>[ \t]*:"))
+  (progn
+    ;; modify the colour of slots to match public, private, etc ...
+    (font-lock-add-keywords 'c++-mode
+                            '(("\\<\\(slots\\|signals\\)\\>" . font-lock-type-face)))
+    ;; make new font for rest of qt keywords
+    (make-face 'qt-keywords-face)
+    (set-face-foreground 'qt-keywords-face "#6599FF")
+    ;; qt keywords
+    (font-lock-add-keywords 'c++-mode
+                            '(("\\<Q_OBJECT\\>" . 'qt-keywords-face)))
+    (font-lock-add-keywords 'c++-mode
+                            '(("\\<SIGNAL\\|SLOT\\>" . 'qt-keywords-face)))
+    (font-lock-add-keywords 'c++-mode
+                            '(("\\<Q[A-Z][A-Za-z]*" . 'qt-keywords-face)))
+    ))
+(add-hook 'c-mode-common-hook 'jk/c-mode-common-hook)
+
+;; Switch fromm *.<impl> to *.<head> and vice versa
+(defun switch-cc-to-h ()
+  (interactive)
+  (when (string-match "^\\(.*\\)\\.\\([^.]*\\)$" buffer-file-name)
+    (let ((name (match-string 1 buffer-file-name))
+          (suffix (match-string 2 buffer-file-name)))
+      (cond ((string-match suffix "c\\|cc\\|C\\|cpp")
+             (cond ((file-exists-p (concat name ".h"))
+                    (find-file (concat name ".h"))
+                    )
+                   ((file-exists-p (concat name ".hh"))
+                    (find-file (concat name ".hh"))
+                    )
+                   ))
+            ((string-match suffix "h\\|hh")
+             (cond ((file-exists-p (concat name ".cc"))
+                    (find-file (concat name ".cc"))
+                    )
+                   ((file-exists-p (concat name ".C"))
+                    (find-file (concat name ".C"))
+                    )
+                   ((file-exists-p (concat name ".cpp"))
+                    (find-file (concat name ".cpp"))
+                    )
+                   ((file-exists-p (concat name ".c"))
+                    (find-file (concat name ".c"))
+                    )))))))
+
+(add-hook 'c-mode-common-hook
+          (lambda()
+            (local-set-key  (kbd "C-c o") 'ff-find-other-file)))
+
+(add-hook 'c-mode-common-hook
+          (lambda ()
+            (font-lock-add-keywords nil
+                                    '(("\\<\\(FIXME\\|TODO\\|BUG\\):" 1 font-lock-warning-face t)))))
+
+;; }}
+
+;; {{ Javascript
+
+(when (locate-library "js2")
+  (autoload 'js2-mode "js2" nil t)
+  (add-to-list 'auto-mode-alist '("\\.js$" . js2-mode)))
+
+;; }}
+
+;; {{ Printing
+
+;; Remove document header
+;;(ps-print-header nil)
+
+;; paper format:
+;; a4small, b4, b5, executive, ledger, legal, letter,
+;; letter-small, statement, tabloid
+(setq ps-paper-type 'a4)
+
+;; no color
+(setq ps-print-color-p nil)
+
+;; }}
+
+;; {{ Python
+
+(when (locate-library "python-mode")
+  (progn
+    ;; Auto load python mode for file extention .py
+    (setq auto-mode-alist (cons '("\\.py$" . python-mode) auto-mode-alist))
+    (setq interpreter-mode-alist (cons '("python" . python-mode)
+                                       interpreter-mode-alist))
+    (autoload 'python-mode "python-mode" "Python editing mode." t)
+
+    (add-hook 'python-mode-hook
+              (lambda ()
+                ;; Spell check in comment and strings
+                (flyspell-prog-mode)
+                ;; Indent to 2 spaces
+                (setq py-indent-offset 2)
+                ))
+
+    ))
+
+;; }}
+
+(require 'ibuffer)
+(setq ibuffer-saved-filter-groups
+      (quote (("default"
+	       ("Thandy"
+		(filename . "Code/thandy"))
+	       ("Vidalia"
+		(filename . "Code/vidalia"))
+	       ("General programming"
+		(or
+		 (mode . c-mode)
+		 (mode . python-mode)
+		 (mode . emacs-lisp-mode)))))))
+
+(add-hook 'ibuffer-mode-hook
+	  (lambda ()
+	    (ibuffer-switch-to-saved-filter-groups "default")))
+(global-set-key (kbd "C-x C-b") 'ibuffer)
+
+
+;; {{ Window handling
+
+(global-set-key (kbd "C-c <left>")  'windmove-left)
+(global-set-key (kbd "C-c <right>") 'windmove-right)
+(global-set-key (kbd "C-c <up>")    'windmove-up)
+(global-set-key (kbd "C-c <down>")  'windmove-down)
+
+;; }}
+
+;; {{ LaTex
+
+;; TeX stuff :: needs auctex
+(setq TeX-auto-save t)
+(setq TeX-parse-self t)
+(setq TeX-parse-query nil)
+(setq TeX-PDF-mode t)
+
+;; }}
+
+;; {{ Golang
+
+(require 'go-mode-load)
+
+;; }}
+
+;; {{ AsciiDoc
+
+(require 'doc-mode)
+(add-to-list 'auto-mode-alist '("\\.txt$" . doc-mode))
+(autoload 'doc-mode "doc-mode")
+
+;; }}
+
+;; {{ MaGit
+;; http://philjackson.github.com/magit/magit.html
+;; http://daemianmack.com/magit-cheatsheet.html
+
+(require 'magit)
+
+;; }}
+
+;; {{ Mac
+(setq mac-option-key-is-meta nil)
+(setq mac-command-key-is-meta t)
+(setq mac-command-modifier 'meta)
+(setq mac-option-modifier nil)
+;; }}
+
+;; {{ Term
+(defadvice ansi-term (after advise-ansi-term-coding-system)
+    (set-buffer-process-coding-system 'utf-8-unix 'utf-8-unix))
+(ad-activate 'ansi-term)
+(require 'multi-term)
+(setq multi-term-program "/bin/bash")
+(eval-after-load "multi-term"
+  '(progn
+     (defun term-send-quote ()
+       (interactive)
+       (term-send-raw-string "\C-v"))
+
+     (defun term-send-M-x ()
+       (interactive)
+       (term-send-raw-string "\ex"))
+
+     (defun term-send-backward-kill-word ()
+       (interactive)
+       (term-send-raw-string "\C-H"))
+
+     (defun term-send-esc ()
+       "Send ESC in term mode."
+       (interactive)
+       (term-send-raw-string "\e"))
+
+     (dolist
+         (bind '(("C-<right>"     . term-send-forward-word)
+                 ("C-<left>"      . term-send-backward-word)
+                 ("C-<backspace>" . term-send-backward-kill-word)
+                 ("C-<delete>"    . term-send-forward-kill-word)
+                 ("C-k"           . term-send-raw)
+                 ("C-y"           . term-send-raw)
+                 ("C-c C-z"       . term-stop-subjob)
+                 ("C-z"           . term-stop-subjob)
+                 ;; work like urxvt tabbed
+                 ("<S-down>"      . multi-term)
+                 ("<S-left>"      . multi-term-prev)
+                 ("<S-right>"     . multi-term-next)
+                 ("C-v"           . term-paste)
+                 ))
+       (add-to-list 'term-bind-key-alist bind))
+     ))
+;; }}
+
+;; {{ Jabber
+(add-to-list 'load-path "~/.emacs.d/jabberEl")
+(require 'jabber)
+(setq jabber-account-list
+      '(("chiiph@gmail.com"
+         (:network-server . "talk.google.com")
+         (:connection-type . ssl))))
+(custom-set-variables
+  ;; custom-set-variables was added by Custom.
+  ;; If you edit it by hand, you could mess it up, so be careful.
+  ;; Your init file should contain only one such instance.
+  ;; If there is more than one, they won't work right.
+ '(jabber-roster-line-format " %c %-25n %u %-8s  %S")
+ '(jabber-show-offline-contacts nil)
+ '(uniquify-buffer-name-style (quote forward) nil (uniquify)))
+
+;; Make jabber.el notify through growl when I get a new message
+(setq jabber-message-alert-same-buffer nil)
+(defun pg-jabber-growl-notify (from buf text proposed-alert)
+  "(jabber.el hook) Notify of new Jabber chat messages"
+  (when (or jabber-message-alert-same-buffer
+            (not (memq (selected-window) (get-buffer-window-list buf))))
+    (if (fboundp 'notify)
+        (if (jabber-muc-sender-p from)
+            (notify (format "%s:"
+                            (jabber-jid-displayname (jabber-jid-user from)))
+                    (format "%s" text))))
+    (if (fbounp 'growl)
+        (if (jabber-muc-sender-p from)
+            (growl (format "%s:"
+                           (jabber-jid-displayname (jabber-jid-user from)))
+                   (format "%s" text))))))
+
+(add-hook 'jabber-alert-message-hooks 'pg-jabber-growl-notify)
+
+;; Same as above, for groupchats
+;; (defun pg-jabber-muc-growl-notify (nick group buf text proposed-alert)
+;;   "(jabber.el hook) Notify of new Jabber MUC messages via Growl"
+;;   (when (or jabber-message-alert-same-buffer
+;; 	    (not (memq (selected-window) (get-buffer-window-list buf))))
+;;     (if nick
+;;         (when (or jabber-muc-alert-self
+;;                   (not (string=
+;;                         nick (cdr (assoc group *jabber-active-groupchats*)))))
+;;           (notify (format "%s:"
+;;                           (jabber-jid-displayname group))
+;;                   (format "%s" text))))))
+;; (add-hook 'jabber-alert-muc-hooks 'pg-jabber-muc-growl-notify)
+;; }}
+
+;; {{ Erc
+(add-to-list 'load-path "~/.emacs.d/erc")
+(require 'erc)
+(require 'znc)
+;; }}
+
+;; {{ LustyExplorer
+(require 'lusty-explorer)
+(global-set-key (kbd "C-x C-f") 'lusty-file-explorer)
+(global-set-key (kbd "C-x b") 'lusty-buffer-explorer)
+;; }}
+(custom-set-faces
+  ;; custom-set-faces was added by Custom.
+  ;; If you edit it by hand, you could mess it up, so be careful.
+  ;; Your init file should contain only one such instance.
+  ;; If there is more than one, they won't work right.
+ )
