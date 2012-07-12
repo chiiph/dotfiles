@@ -43,6 +43,7 @@ set nobackup
 set noswapfile
 
 filetype plugin indent on
+filetype plugin on
 
 set expandtab
 
@@ -118,4 +119,12 @@ function! g:ToggleNuMode()
         set rnu
     endif
 endfunc
-nnoremap <C-L> :call g:ToggleNuMode()<cr>
+"nnoremap <C-L> :call g:ToggleNuMode()<cr>
+
+map ,a :A<CR>
+map ,f :NERDTreeToggle<CR>
+
+map <C-left> :tabprevious<CR>
+map <C-right> :tabnext<CR>
+map <C-t> :tabnew<CR>
+map <C-w> :tabclose<CR>
